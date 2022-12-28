@@ -1,0 +1,364 @@
+---
+title: "Um despertar gráfico-tabular de Star Wars" 
+subtitle: "Que o dplyr, o ggplot2 e os tibbles estejam com você durante essa jornada!"
+author: "Marcos Samuel Mattos Santos"
+output:
+  rmdformats::readthedown:
+    highlight: kate
+    code_folding: hide
+---
+
+# 0) Introdução
+
+Seja bem-vindo ao universo dos Jedis visualizadores de dados (espero que você não seja um Sith infiltrado).
+
+![](https://media.giphy.com/media/ZwxpIHk5LutMc/giphy.gif)
+
+Nessa pequena jornada algumas perguntas serão respondidas a partir de uma minuciosa análise dos dados disponibilizados por uma pesquisa de opinião realizada com 1186 pessoas sobre a tão amada franquia Star Wars!
+
+Uma pequena observação antes de começarmos: iremos supor que essa amostra é representativa (suposição ousada, não? ... O que?! ... Não acha?!!! Então quero na minha mesa a variância dos estimadores das variáveis de interesse... e é melhor que ela seja mínima!!! Caso contrário... conhecerás de fato o que é o lado negro da força, pois vamos te mandar pra lá!!).
+
+![](https://media1.tenor.com/images/676be5d854eb9c2ce4af9d21a7a54e02/tenor.gif)
+
+Brincadeiras à parte, as perguntas você pode conferir à esquerda, no sumário deste relatório. Ao clicar nelas, você será redirecionado diretamente para a seção referida. Além disso, você pode visualizar os códigos utilizados para a criação de cada gráfico e tabela acionando os diversos botões "Code" disponibilizados ao longo do arquivo.
+
+Vamos começar?! Próximo planeta, Millennium Falcon... ops, digo, próxima seção, RMarkDown!!!
+
+![](https://media1.tenor.com/images/087112219740a497a57e39d0ea58368a/tenor.gif)
+
+```{r Packages, echo=TRUE, message=FALSE, warning=FALSE, cache=FALSE, warnings=FALSE, include=FALSE}
+# Pacotes e leitura da base principal
+packages <- c('tidyverse','lubridate','stringr','purrr','data.table','ggplot2','readxl','openxlsx','scales','rmdformats','knitr','kableExtra','magrittr')
+
+install_and_load_packages <- function(pckg){
+  
+  if (!pckg %in% installed.packages()[,1]){ # verifica se um determinado pacote NÃO está instalado
+    install.packages(pckg, quiet = T)
+  }
+  
+  library(pckg,character.only = T,quietly = T) # carrega o pacote
+  
+  return(paste('Package',pckg,'installed and loaded'))
+  
+}
+
+# aplicando a função para cada entrada (pacote) do vetor
+sapply(X = packages,FUN = install_and_load_packages,simplify = T,USE.NAMES = F)
+
+```
+
+
+```{r Base, echo=TRUE, message=FALSE, warning=FALSE, cache=FALSE, warnings=FALSE}
+
+setwd("C:/Users/marco/OneDrive/Documents/Portfolio/star_wars_analytics") #alterar para o seu diretório com os arquivos salvos
+
+base <- read.csv2("SW.csv") %>% as_tibble
+
+```
+
+# 1) A franquia Star Wars foi mais assistida por qual gênero?
+
+```{r Pergunta 1, message=FALSE, warning=FALSE}
+
+freq.gen <- base %>% 
+  filter(V2 == 'Yes') %>% 
+  filter(V34 != '') %>% 
+  group_by(Gênero = V34) %>% 
+  summarise(Frequência = V34 %>% table %>% as.vector) %>% 
+  mutate(Percentual = Frequência %>% prop.table %>% multiply_by(100) %>% round(.,1)) %>% 
+  mutate(Gênero = c('Feminino','Masculino'))
+  
+resposta.1 <- freq.gen %>% 
+  filter(Frequência==max(Frequência)) %>% 
+  pull(Gênero)
+
+kable(freq.gen,caption = "Audiência por Gênero")
+
+ggplot(freq.gen, aes(x="",y=Frequência, fill=Gênero)) +
+  geom_bar(width = 1, stat = "identity") +
+  coord_polar("y",start=0) + 
+  theme_minimal()+
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        panel.border = element_blank(),
+        axis.ticks = element_blank(),
+  plot.title=element_text(size=14, face="bold")
+  ) +
+  geom_text(aes(y = Frequência+c(820/4,-820/4), 
+                label = percent(Frequência/sum(Frequência),accuracy = 0.1)), size=5)
+
+```
+
+Conforme a tabela e o gráfico mostram, o gênero `r resposta.1` é o que responde à primeira pergunta. Entretanto, o gênero feminino não está muito longe na audiência, fato que demonstra boa popularidade da franquia entre as mulheres.
+
+Cabe observar que, para a obtenção destes dados, foi realizada a filtragem na variável V2 ("Você já assistiu algum filme da franquia Star Wars?"), considerando apenas as respostas positivas ("Yes"). 
+
+Além disso, as respostas em branco para a variável V34 ("Gênero") foram desconsideradas na análise.
+
+
+# 2) Com relação à faixa etária:
+
+## 2.1) Qual foi a mais entrevistada por gênero?
+
+```{r Pergunta 2.1, message=FALSE, warning=FALSE}
+
+base.2.1 <- base %>% 
+  filter(V34!="") %>% 
+  group_by(Gênero = V34,`Faixa Etária` = V35) %>% 
+  summarise(Frequência = V35 %>% table %>% as.vector) %>% 
+  suppressMessages %>% 
+  mutate(Percentual = Frequência %>% divide_by(Frequência %>% sum(.,na.rm=T)) %>% multiply_by(100) %>% round(.,1)) %>%
+  ungroup %>% 
+  mutate(`Faixa Etária` = rep(c('Mais de 60 anos','Entre 18 e 29 anos','Entre 30 e 44 anos','Entre 45 e 60 anos'),2)) %>% 
+  arrange(Gênero,`Faixa Etária`)
+
+resposta.2.1 <- base.2.1 %>% 
+  filter(Percentual==max(Percentual)) %>% 
+  select(`Faixa Etária`) %>% 
+  pull %>% 
+  substr(.,2,100) %>% 
+  paste0('para os dois gêneros, a faixa etária mais entrevistada foi a de indivíduos com idade e',.)
+
+kable(base.2.1,caption = "Quantidade de entrevistados por Gênero e Faixa Etária")
+
+#feminino - gráfico
+
+ggplot(filter(base.2.1,Gênero=="Female"),aes(x=`Faixa Etária`,y=Frequência,fill=`Faixa Etária`)) +
+  geom_bar(stat="identity") +
+  theme_minimal() +
+  theme(axis.text.x = element_blank())+
+  ggtitle("Gênero Feminino") + 
+  scale_fill_brewer(palette = "Reds") 
+
+#masculino - gráfico
+
+ggplot(filter(base.2.1,Gênero=="Male"),aes(x=`Faixa Etária`,y=Frequência,fill=`Faixa Etária`)) +
+  geom_bar(stat="identity") +
+  theme_minimal() +
+  theme(axis.text.x = element_blank())+
+  ggtitle("Gênero Masculino") + 
+  scale_fill_brewer(palette = "Blues") 
+
+```
+
+De acordo com a tabela e com os gráficos apresentados, `r resposta.2.1`. 
+
+Tal resultado reflete a antiguidade da franquia que, apesar de possuir filmes mais recentes (talvez para cativar um público mais jovem), estreou em 1977 com "Uma nova esperança".
+
+## 2.2) Qual foi a que mais assistiu pelo menos um filme da franquia por gênero?
+
+```{r Pergunta 2.2, message=FALSE, warning=FALSE}
+
+base.2.2 <- base %>% 
+  mutate(`Quantos Filmes Assistiu` = rowSums(select(.,matches(paste0('V',4:9))),na.rm=T)) %>% 
+  filter(`Quantos Filmes Assistiu` >= 1, V34 != '') %>% 
+  group_by(Gênero = V34, `Faixa Etária` = V35) %>% 
+  summarise(Frequência = V35 %>% table %>% as.vector) %>% 
+  suppressMessages %>% 
+  mutate(Percentual = Frequência %>% divide_by(Frequência %>% sum(.,na.rm=T)) %>% multiply_by(100) %>% round(.,1)) %>% 
+  ungroup %>% 
+  mutate(`Faixa Etária` = rep(c('Mais de 60 anos','Entre 18 e 29 anos','Entre 30 e 44 anos','Entre 45 e 60 anos'),2)) %>% 
+  arrange(Gênero,`Faixa Etária`)
+
+resposta.2.2 <- base.2.2 %>% 
+  filter(Percentual==max(Percentual)) %>% 
+  select(`Faixa Etária`) %>% 
+  pull %>% 
+  substr(.,2,100) %>% 
+  paste0('para os dois gêneros, a faixa etária que mais assistiu pelo menos um filme da franquia foi, novamente, a de indivíduos com idade e',.)
+
+kable(base.2.2,caption = "Quantidade de indivíduos que assistiram pelo menos um filme da franquia por Gênero e Faixa Etária")
+
+#feminino - gráfico
+
+ggplot(filter(base.2.2,Gênero=="Female"),aes(x=`Faixa Etária`,y=Frequência,fill=`Faixa Etária`)) +
+  geom_bar(stat="identity") +
+  theme_minimal() +
+  theme(axis.text.x = element_blank())+
+  ggtitle("Gênero Feminino") + 
+  scale_fill_brewer(palette = "Reds") 
+
+#masculino - gráfico
+
+ggplot(filter(base.2.2,Gênero=="Male"),aes(x=`Faixa Etária`,y=Frequência,fill=`Faixa Etária`)) +
+  geom_bar(stat="identity") +
+  theme_minimal() +
+  theme(axis.text.x = element_blank())+
+  ggtitle("Gênero Masculino") + 
+  scale_fill_brewer(palette = "Blues")
+
+```
+
+Conforme a tabela e os gráficos, `r resposta.2.2`. 
+
+# 3) Qual o filme mais assistido por grau de escolaridade?
+
+```{r Pergunta 3, message=FALSE, warning=FALSE}
+
+base.3 <- base %>% 
+  filter(V37 != '') %>% 
+  group_by(Escolaridade = V37) %>% 
+  summarise(across(matches(paste0('V',4:9)),~sum(.,na.rm=T))) %>% 
+  suppressMessages %>% 
+  ungroup
+
+names(base.3)[-1] <- c('I - A ameaça fantasma','II - O ataque dos clones','III - A vingança dos Sith','IV - Uma nova esperança','V - O império contra-ataca','VI - O retorno de Jedi')
+
+kable(base.3, caption = "Audiência dos filmes por escolaridade")
+
+resp.3 <- base.3 %>% 
+  pivot_longer(cols = -1,names_to = 'Filme mais assistido',values_to = 'Audiência') %>% 
+  group_by(Escolaridade) %>% 
+  filter(Audiência == max(Audiência)) %>% 
+  mutate(Contagem = n()) %>% 
+  mutate(`Filme mais assistido` = ifelse(Contagem > 1,'Todos com a mesma audiência',`Filme mais assistido`)) %>% 
+  select(-Contagem) %>% 
+  ungroup %>%
+  distinct
+
+kable(resp.3, caption = "Filmes mais assistidos por escolaridade")
+
+excecao <- table(resp.3$`Filme mais assistido`)
+
+regra <- names(excecao[which(excecao!=1)])
+
+nome.excecao <- names(excecao[which(excecao==1)])
+
+grau.dif <- resp.3$Escolaridade[which(resp.3$`Filme mais assistido` == nome.excecao)] 
+
+```
+Na primeira tabela encontram-se as audiências de cada um dos filmes para cada um dos graus escolaridades.
+
+Na segunda encontra-se o filme mais assistido e sua respectiva audiência para cada grau de escolaridade. Nesta é possível verificar que há um filme mais assistido (Star Wars Episódio `r regra`) para todos os graus de escolaridade, excetuando-se `r grau.dif`, pois este possui audiências iguais para todos os filmes.
+
+Esse resultado mostra que indivíduos de praticamente todas as escolaridades tiveram acesso ao filme da franquia com a melhor avaliação do público no [Internet Movie Database](https://www.imdb.com/title/tt0080684/?ref_=fn_al_tt_2) (IMDb).
+
+# 4) Em relação aos personagens:
+
+## 4.1) Qual é visto de forma mais favorável?
+
+```{r Pergunta 4.1, message=FALSE, warning=FALSE}
+
+personagens <- read_xlsx(path = "personagens.xlsx",sheet = 1)
+
+base.4.1 <- base %>% 
+  select(V16:V29)
+
+names(base.4.1) <- personagens$Nome
+
+very.favorably <- base.4.1 %>% 
+  pivot_longer(cols = everything(),names_to = 'Personagem',values_to = 'Opiniao') %>% 
+  filter(Opiniao == 'Very favorably') %>% 
+  count(Personagem) %>% 
+  rename(`Frequência de Very Favorably` = `n`) %>% 
+  arrange(match(Personagem,personagens$Nome))
+  
+favoravel <- very.favorably %>% 
+  filter(`Frequência de Very Favorably` == max(`Frequência de Very Favorably`) )
+
+resposta.4.1 <- favoravel$Personagem
+
+kable(arrange(very.favorably,desc(`Frequência de Very Favorably`)),
+      caption = "Frequências decrescentes de Very Favorably por personagem")
+
+```
+
+
+De acordo com a tabela anterior pode-se verificar que o personagem visto de forma mais favorável é o `r resposta.4.1`, o que já era esperado, visto que ele é o "queridinho da galera", bem conhecido por seu jeito ousado, bem-humorado e debochado (no melhor sentido da palavra).
+
+## 4.2) Qual é visto de forma menos favorável?
+
+```{r Pergunta 4.2, message=FALSE, warning=FALSE}
+
+base.4.2 <- base.4.1
+
+very.unfavorably <- base.4.2 %>% 
+  pivot_longer(cols = everything(),names_to = 'Personagem',values_to = 'Opiniao') %>% 
+  filter(Opiniao == 'Very unfavorably') %>% 
+  count(Personagem) %>% 
+  rename(`Frequência de Very Unfavorably` = `n`) %>% 
+  arrange(match(Personagem,personagens$Nome))
+
+desfavoravel <- very.unfavorably %>% 
+  filter(`Frequência de Very Unfavorably` == max(`Frequência de Very Unfavorably`) )
+
+resposta.4.2 <- desfavoravel$Personagem
+
+kable(arrange(very.unfavorably,desc(`Frequência de Very Unfavorably`)),
+      caption = "Frequências decrescentes de Very Unfavorably por personagem")
+```
+Pela tabela acima pode-se verificar que o personagem visto de forma mais desfavorável é o `r resposta.4.2`. Essa resposta faz sentido, pois tal personagem é um baita trapalhão, não é mesmo? Apesar disso, ele é bem intencionado, muito engraçado e, por isso, dá um toque humorístico bem bacana aos filmes.
+
+# 5) Considerando os fãs de Star Trek:
+
+## 5.1) Qual a proporção conhece o Universo Expandido?
+
+```{r Pergunta 5.1, message=FALSE, warning=FALSE}
+
+base.5.1 <- base %>% filter(V33=="Yes") %>% select(V31)
+
+base.5.1 <- as.data.frame(table(base.5.1))
+
+levels(base.5.1[,1])[1] <- "Não respondido"
+
+names(base.5.1) <- c("Familiarizado com o U.E.","Frequência")
+
+base.5.1 <- base.5.1 %>% 
+            mutate("Percentual" = round(100*Frequência/sum(Frequência),1)) %>%
+            arrange(desc(Percentual))
+
+resposta.5.1 <- percent(base.5.1$Percentual[ which( base.5.1[,1]=="Yes" )]/100,accuracy = 1)
+
+kable(base.5.1,caption = "Frequências decrescentes dos indivíduos por familiarização com o Universo Expandido")
+```
+
+A tabela mostra que `r resposta.5.1` dos fãs de Star Trek afirmam estar familiarizados com o Universo Expandido. Esse resultado deve fazer algum sentido, pois eu mesmo estou entre os 64% que não conhecem o Universo Expandido!
+
+## 5.2) Qual a proporção de fãs do Universo Expandido?
+
+```{r Pergunta 5.2, message=FALSE, warning=FALSE}
+
+base.5.2 <- base %>% 
+  filter(V33=="Yes") %>% 
+  select(V32) %>% 
+  table %>% 
+  as.data.frame
+
+# base.5.2 <- as.data.frame(table(base.5.2))
+
+levels(base.5.2[,1])[1] <- "Não respondido"
+
+names(base.5.2) <- c("Familiarizado com o U.E.","Frequência")
+
+base.5.2 <- base.5.2 %>% 
+  mutate(Percentual = Frequência %>% divide_by(Frequência %>% sum(.,na.rm=T)) %>% multiply_by(100) %>% round(.,1)) %>% 
+  arrange(desc(Percentual))
+
+resposta.5.2 <- percent(base.5.2$Percentual[ which( base.5.2[,1]=="Yes" )]/100,accuracy = 0.1)
+
+kable(base.5.2,caption = "Frequências decrescentes dos indivíduos considerando se são fãs do Universo Expandido")
+```
+
+A tabela mostra que `r resposta.5.2` dos fãs de Star Trek também afirmaram ser fãs do Universo Expandido. Um percentual bem baixo, do qual eu não faço parte. 
+
+E você? Conhecia o Universo Expandido? Se sim, é fã dele?
+
+# 6) Conclusão
+
+Infelizmente chegamos ao fim da nossa jornada ~~interestelar~~ de estatística pelo universo Star Wars!
+
+![](https://media.giphy.com/media/3ornk6UHtk276vLtkY/giphy.gif)
+
+Muito obrigado a você que nos acompanhou até aqui!
+
+Se você gostou, favor não hesitar e um feedback me enviar (à la Yoda!) para o e-mail <marcossam2011@hotmail.com>. 
+
+Críticas construtivas e sugestões também serão super bem-vindas!
+
+Que a força esteja com você, jovem Padawan!!!
+
+![](https://media.giphy.com/media/ZFi2wFRs3lBvYNglWk/giphy.gif)
+
+Até a próxima!!! 
+
+![](https://media1.tenor.com/images/e0fd90ed396f88cf65cfce0a24dfa8ff/tenor.gif)
